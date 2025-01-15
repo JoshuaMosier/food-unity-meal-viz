@@ -40,7 +40,7 @@ def load_data():
     df['image_url'] = df['image_url'].apply(lambda x: x.replace(
         'www.cookunity.com', 
         'cu-media.imgix.net'
-    ) + '?height=500&width=500&fit=crop&format=webp&quality=90' if isinstance(x, str) else x)
+    ) + '?height=400&width=400&fit=crop&format=webp&quality=90' if isinstance(x, str) else x)
     
     return df
 

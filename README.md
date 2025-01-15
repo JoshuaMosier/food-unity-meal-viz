@@ -2,6 +2,8 @@
 
 A Streamlit-powered web application for analyzing and visualizing meal data with advanced Bayesian ranking algorithms.
 
+ **[View Live App](https://food-unity-meal.streamlit.app/)**
+
 ## Features
 
 ### Meal Rankings Page
