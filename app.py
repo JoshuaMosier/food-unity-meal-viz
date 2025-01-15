@@ -31,10 +31,10 @@ def load_data():
     df['rating'] = df['rating'].fillna(0)
     
     # Filter out items with 0 ratings
-    df = df[df['rating'] > 0]
+    # df = df[df['rating'] > 0]
     
     # Handle price data - mark missing, zero, or unrealistically low prices as NaN
-    df['price'] = df['price'].mask(df['price'] < 7, pd.NA)
+    # df['price'] = df['price'].mask(df['price'] < 7, pd.NA)
     
     # Transform image URLs with imgix parameters for optimization
     df['image_url'] = df['image_url'].apply(lambda x: x.replace(
@@ -109,33 +109,16 @@ if page == "Home":
 elif page == "Meal Rankings":
     st.title("Meal Rankings - Bayesian Average")
     
-    # Sidebar controls
-    st.sidebar.header("Calculation Parameters")
+    # Add Bayesian parameters
     global_mean_rating = df['rating'].mean()
-
-    C = st.sidebar.number_input(
-        "Prior belief (C) - Global mean rating",
-        min_value=1.0,
-        max_value=5.0,
-        value=float(global_mean_rating),
-        help="The assumed average rating for items with few reviews"
-    )
-
-    m = st.sidebar.number_input(
-        "Minimum reviews weight (m)",
-        min_value=1,
-        max_value=2000,
-        value=100,
-        help="Higher values give more weight to the prior belief"
-    )
-
-    # Calculate Bayesian average using cached function
-    df['bayesian_avg'] = calculate_bayesian_ratings(df, C, m)
-
-    # Enhanced meal display
-    sorted_meals = df.sort_values('bayesian_avg', ascending=False)
+    C = global_mean_rating  # Prior belief
+    m = 100  # Minimum reviews weight
     
-    # Add display options
+    # Add debug statements
+    # st.write(f"Total meals in original dataset: {len(df)}")
+    # st.write(f"Meals with ratings > 0: {len(df[df['rating'] > 0])}")
+    
+    # Add display options FIRST
     display_options = st.columns(4)
     with display_options[0]:
         cuisine_filter = st.multiselect(
@@ -154,29 +137,51 @@ elif page == "Meal Rankings":
     with display_options[2]:
         calorie_range = st.slider(
             "Calorie Range",
-            int(df['calories'].min()),
+            0,
             int(df['calories'].max()),
-            (int(df['calories'].min()), int(df['calories'].max()))
+            (0, int(df['calories'].max()))
         )
     with display_options[3]:
         price_range = st.slider(
             "Price Range ($)",
-            float(df['price'].min()),
+            0.0,
             float(df['price'].max()),
-            (float(df['price'].min()), float(df['price'].max()))
+            (0.0, float(df['price'].max()))
         )
 
+    # Filter out zero ratings only for display purposes
+    display_df = df[df['rating'] > 0].copy()
+    
+    # Calculate Bayesian average using cached function
+    display_df['bayesian_avg'] = calculate_bayesian_ratings(display_df, C, m)
+
+    # Enhanced meal display
+    sorted_meals = display_df.sort_values('bayesian_avg', ascending=False)
+    
     # Apply filters
     if cuisine_filter:
         sorted_meals = sorted_meals[sorted_meals['cuisines'].str.contains('|'.join(cuisine_filter), na=False)]
     if diet_filter:
         sorted_meals = sorted_meals[sorted_meals['specifications'].str.contains('|'.join(diet_filter), na=False)]
+    
+    # Modified price/calorie filtering to handle missing price data
     sorted_meals = sorted_meals[
-        (sorted_meals['price'] >= price_range[0]) & 
-        (sorted_meals['price'] <= price_range[1]) &
-        (sorted_meals['calories'] >= calorie_range[0]) &
+        (sorted_meals['calories'] >= calorie_range[0]) & 
         (sorted_meals['calories'] <= calorie_range[1])
     ]
+    
+    # Only apply price filter to meals that have price data
+    if not sorted_meals.empty:
+        price_mask = (
+            (sorted_meals['price'].isna()) |  # Keep meals with no price
+            (
+                (sorted_meals['price'] >= price_range[0]) & 
+                (sorted_meals['price'] <= price_range[1])
+            )
+        )
+        sorted_meals = sorted_meals[price_mask]
+    
+    st.write(f"After applying filters: {len(sorted_meals)} meals")
 
     # Display meals in a grid
     cols_per_row = 4
@@ -187,7 +192,6 @@ elif page == "Meal Rankings":
                 meal = sorted_meals.iloc[i + j]
                 with col:
                     with st.container():
-                        # Debug image URLs
                         if pd.notna(meal['image_url']):
                             st.image(meal['image_url'])
                         else:
@@ -200,12 +204,10 @@ elif page == "Meal Rankings":
                             </div>
                         """, unsafe_allow_html=True)
                         
-                        # Add description with placeholder space if empty
                         description_text = meal['description'].strip() if 'description' in meal and pd.notna(meal['description']) else "&nbsp;"
                         st.markdown(f"_{description_text}_", unsafe_allow_html=True)
                         
-                        # Create columns for metrics with adjusted widths
-                        metric_cols = st.columns([1, 1, 1])  # Now just 3 columns
+                        metric_cols = st.columns([1, 1, 1])
                         with metric_cols[0]:
                             st.metric("Score", f"{meal['bayesian_avg']:.2f}")
                         with metric_cols[1]:
@@ -213,23 +215,30 @@ elif page == "Meal Rankings":
                         with metric_cols[2]:
                             st.metric("Reviews", f"{int(meal['review_count'])}")
                         
-                        # Move details into expander
                         with st.expander("Meal Details"):
-                            # Display meal details
-                            st.markdown(f"**Price:** ${meal['price']:.2f}")
+                            if pd.notna(meal['price']):
+                                st.markdown(f"**Price:** ${meal['price']:.2f}")
+                            else:
+                                st.markdown("**Price:** Not available")
                             st.markdown(f"**Chef:** {meal['chef_name']}")
                             st.markdown(f"**Calories:** {meal['calories']}")
                             
-                            # Display cuisines and specifications as tags
-                            st.markdown("**Cuisines:**")
-                            cuisines = meal['cuisines'].split(',')
-                            st.markdown(' '.join([f"`{cuisine.strip()}`" for cuisine in cuisines]))
+                            # Add checks for cuisines
+                            if pd.notna(meal['cuisines']) and isinstance(meal['cuisines'], str):
+                                st.markdown("**Cuisines:**")
+                                cuisines = meal['cuisines'].split(',')
+                                st.markdown(' '.join([f"`{cuisine.strip()}`" for cuisine in cuisines]))
+                            else:
+                                st.markdown("**Cuisines:** Not available")
                             
-                            st.markdown("**Features:**")
-                            specs = meal['specifications'].split('|')
-                            st.markdown(' '.join([f"`{spec.strip()}`" for spec in specs]))
+                            # Add checks for specifications
+                            if pd.notna(meal['specifications']) and isinstance(meal['specifications'], str):
+                                st.markdown("**Features:**")
+                                specs = meal['specifications'].split('|')
+                                st.markdown(' '.join([f"`{spec.strip()}`" for spec in specs]))
+                            else:
+                                st.markdown("**Features:** Not available")
                             
-                            # Add a link to the original
                             if pd.notna(meal['url']):
                                 st.markdown(f"[View Details]({meal['url']})")
                         
