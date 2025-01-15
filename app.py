@@ -22,8 +22,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Load and prepare data
-@st.cache_data
+# Enhance load_data caching with TTL
+@st.cache_data(ttl=3600)  # Cache for 1 hour
 def load_data():
     df = pd.read_csv('meals.csv')
     # Fill NaN values for review count and rating
@@ -70,6 +70,46 @@ def transform_image_url(url):
     except Exception as e:
         st.write(f"Error transforming URL {url}: {str(e)}")
         return None
+
+# Add caching for cuisine and specification options
+@st.cache_data(ttl=3600)
+def get_unique_cuisines(df):
+    return sorted(set([cuisine.strip() 
+                      for cuisines in df['cuisines'].dropna() 
+                      for cuisine in cuisines.split(',')]))
+
+@st.cache_data(ttl=3600)
+def get_unique_specifications(df):
+    return sorted(set([spec.strip() 
+                      for specs in df['specifications'].dropna() 
+                      for spec in specs.split('|')]))
+
+# Cache only the filtering operations
+@st.cache_data
+def filter_dataframe(df, cuisine_filter, diet_filter, calorie_range, price_range):
+    filtered_meals = df[df['rating'] > 0].copy()
+    
+    if cuisine_filter:
+        filtered_meals = filtered_meals[filtered_meals['cuisines'].str.contains('|'.join(cuisine_filter), na=False)]
+    if diet_filter:
+        filtered_meals = filtered_meals[filtered_meals['specifications'].str.contains('|'.join(diet_filter), na=False)]
+    
+    filtered_meals = filtered_meals[
+        (filtered_meals['calories'] >= calorie_range[0]) & 
+        (filtered_meals['calories'] <= calorie_range[1])
+    ]
+    
+    if not filtered_meals.empty:
+        price_mask = (
+            (filtered_meals['price'].isna()) |
+            (
+                (filtered_meals['price'] >= price_range[0]) & 
+                (filtered_meals['price'] <= price_range[1])
+            )
+        )
+        filtered_meals = filtered_meals[price_mask]
+    
+    return filtered_meals
 
 # Load data
 df = load_data()
@@ -123,16 +163,12 @@ elif page == "Meal Rankings":
     with display_options[0]:
         cuisine_filter = st.multiselect(
             "Filter by Cuisine",
-            options=sorted(set([cuisine.strip() 
-                              for cuisines in df['cuisines'].dropna() 
-                              for cuisine in cuisines.split(',')]))
+            options=get_unique_cuisines(df)
         )
     with display_options[1]:
         diet_filter = st.multiselect(
             "Dietary Preferences",
-            options=sorted(set([spec.strip() 
-                              for specs in df['specifications'].dropna() 
-                              for spec in specs.split('|')]))
+            options=get_unique_specifications(df)
         )
     with display_options[2]:
         calorie_range = st.slider(
@@ -155,31 +191,9 @@ elif page == "Meal Rankings":
     # Calculate Bayesian average using cached function
     display_df['bayesian_avg'] = calculate_bayesian_ratings(display_df, C, m)
 
-    # Enhanced meal display
-    sorted_meals = display_df.sort_values('bayesian_avg', ascending=False)
-    
-    # Apply filters
-    if cuisine_filter:
-        sorted_meals = sorted_meals[sorted_meals['cuisines'].str.contains('|'.join(cuisine_filter), na=False)]
-    if diet_filter:
-        sorted_meals = sorted_meals[sorted_meals['specifications'].str.contains('|'.join(diet_filter), na=False)]
-    
-    # Modified price/calorie filtering to handle missing price data
-    sorted_meals = sorted_meals[
-        (sorted_meals['calories'] >= calorie_range[0]) & 
-        (sorted_meals['calories'] <= calorie_range[1])
-    ]
-    
-    # Only apply price filter to meals that have price data
-    if not sorted_meals.empty:
-        price_mask = (
-            (sorted_meals['price'].isna()) |  # Keep meals with no price
-            (
-                (sorted_meals['price'] >= price_range[0]) & 
-                (sorted_meals['price'] <= price_range[1])
-            )
-        )
-        sorted_meals = sorted_meals[price_mask]
+    # First filter, then sort
+    filtered_meals = filter_dataframe(display_df, cuisine_filter, diet_filter, calorie_range, price_range)
+    sorted_meals = filtered_meals.sort_values('bayesian_avg', ascending=False)
     
     st.write(f"After applying filters: {len(sorted_meals)} meals")
 
