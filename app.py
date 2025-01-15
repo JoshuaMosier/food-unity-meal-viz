@@ -76,12 +76,37 @@ df = load_data()
 
 # Create pages
 pages = {
+    "Home": "home",
     "Meal Rankings": "rankings",
     "Statistics & Insights": "stats"
 }
 page = st.sidebar.radio("Navigate", pages.keys())
 
-if page == "Meal Rankings":
+# Add the landing page content
+if page == "Home":
+    st.title("CookUnity Meal Analysis")
+    
+    st.markdown("""
+    This tool analyzes CookUnity meal data with Bayesian averaging for better ranking accuracy.
+    
+    ### Features:
+    - Meal Rankings: Sort by Bayesian average (rating + review count)
+    - Filtering: Cuisine, diet, calories, price
+    - Statistics: Price-value analysis and distributions
+    """)
+    
+    # Key metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Meals", len(df))
+    with col2:
+        st.metric("Avg Rating", f"{df['rating'].mean():.2f}")
+    with col3:
+        st.metric("Cuisines", len(df['cuisines'].str.split(',').explode().unique()))
+    with col4:
+        st.metric("Chefs", len(df['chef_name'].unique()))
+
+elif page == "Meal Rankings":
     st.title("Meal Rankings - Bayesian Average")
     
     # Sidebar controls
@@ -180,7 +205,7 @@ if page == "Meal Rankings":
                         with metric_cols[0]:
                             st.metric("Score", f"{meal['bayesian_avg']:.2f}")
                         with metric_cols[1]:
-                            st.metric("Rating", f"{meal['rating']:.1f}")
+                            st.metric("Rating", f"{meal['rating']:.2f}")
                         with metric_cols[2]:
                             st.metric("Reviews", f"{int(meal['review_count'])}")
                         
