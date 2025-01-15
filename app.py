@@ -164,7 +164,7 @@ if page == "Meal Rankings":
                     with st.container():
                         # Debug image URLs
                         if pd.notna(meal['image_url']):
-                            st.image(meal['image_url'], use_column_width=True)
+                            st.image(meal['image_url'])
                         else:
                             st.write("⚠️ No image available")
                             st.write(f"Original URL in data: {meal['url']}")
