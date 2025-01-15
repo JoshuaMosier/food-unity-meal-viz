@@ -200,6 +200,10 @@ elif page == "Meal Rankings":
                             </div>
                         """, unsafe_allow_html=True)
                         
+                        # Add description with placeholder space if empty
+                        description_text = meal['description'].strip() if 'description' in meal and pd.notna(meal['description']) else "&nbsp;"
+                        st.markdown(f"_{description_text}_", unsafe_allow_html=True)
+                        
                         # Create columns for metrics with adjusted widths
                         metric_cols = st.columns([1, 1, 1])  # Now just 3 columns
                         with metric_cols[0]:
@@ -224,10 +228,6 @@ elif page == "Meal Rankings":
                             st.markdown("**Features:**")
                             specs = meal['specifications'].split('|')
                             st.markdown(' '.join([f"`{spec.strip()}`" for spec in specs]))
-                            
-                            # Show description if available
-                            if 'description' in meal and pd.notna(meal['description']):
-                                st.markdown(f"_{meal['description']}_")
                             
                             # Add a link to the original
                             if pd.notna(meal['url']):
